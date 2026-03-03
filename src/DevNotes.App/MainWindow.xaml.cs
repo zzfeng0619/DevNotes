@@ -1,21 +1,16 @@
-﻿using System.Text;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace DevNotes.App;
 
 /// <summary>
-/// Interaction logic for MainWindow.xaml
+/// 应用主窗口的代码隐藏类，负责初始化 UI 以及承载 DataContext。
+/// 大部分界面逻辑放在对应的 ViewModel 中，本类保持尽量精简。
 /// </summary>
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// 初始化主窗口并加载 XAML 定义的界面。
+    /// </summary>
     public MainWindow()
     {
         InitializeComponent();
