@@ -47,3 +47,34 @@ public class Note
     /// </summary>
     public bool IsDeleted { get; set; }
 }
+
+/// <summary>
+/// 定义与笔记实体相关的数据访问操作接口。
+/// 该接口不关心具体存储介质，实现类可以使用 SQLite、本地文件或远程 API 等方式。
+/// </summary>
+public interface INoteRepository
+{
+    /// <summary>
+    /// 读取所有未被逻辑删除的笔记集合。
+    /// </summary>
+    /// <returns>包含所有有效笔记的集合。</returns>
+    IReadOnlyList<Note> GetAll();
+
+    /// <summary>
+    /// 将新的笔记保存到存储介质中，并更新其标识等信息。
+    /// </summary>
+    /// <param name="note">要保存的笔记实例。</param>
+    void Add(Note note);
+
+    /// <summary>
+    /// 更新已存在笔记的内容。
+    /// </summary>
+    /// <param name="note">包含最新数据的笔记实例。</param>
+    void Update(Note note);
+
+    /// <summary>
+    /// 逻辑删除指定的笔记。
+    /// </summary>
+    /// <param name="noteId">要删除的笔记标识。</param>
+    void Delete(int noteId);
+}
