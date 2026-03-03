@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/DevNotes.Core/">
+    <Project Path="DevNotes.Core/DevNotes.Core/DevNotes.Core.csproj" />
+  </Folder>
+  <Folder Name="/DevNotes.Domain/">
+    <Project Path="DevNotes.Domain/DevNotes.Domain/DevNotes.Domain.csproj" />
+  </Folder>
+  <Folder Name="/DevNotes.Infrastructure/">
+    <Project Path="DevNotes.Infrastructure/DevNotes.Infrastructure/DevNotes.Infrastructure.csproj" />
+  </Folder>
+  <Project Path="DevNotes.App/DevNotes.App.csproj" />
+  <Project Path="DevNotes.Tests/DevNotes.Tests.csproj" />
+</Solution>

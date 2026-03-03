@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DevNotes.Domain\DevNotes.Domain\DevNotes.Domain.csproj" />
+    <ProjectReference Include="..\DevNotes.Core\DevNotes.Core\DevNotes.Core.csproj" />
+    <ProjectReference Include="..\DevNotes.Infrastructure\DevNotes.Infrastructure\DevNotes.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>
