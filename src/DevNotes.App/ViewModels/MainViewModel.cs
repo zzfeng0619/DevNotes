@@ -13,6 +13,7 @@ public class MainViewModel : ObservableObject
 {
     private readonly INoteRepository _noteRepository;
     private Note? _selectedNote;
+    private bool _showMarkdownHints;
 
     /// <summary>
     /// 初始化 <see cref="MainViewModel"/> 实例，
@@ -31,6 +32,15 @@ public class MainViewModel : ObservableObject
         DeleteNoteCommand = new RelayCommand(_ => DeleteCurrentNote(), _ => SelectedNote != null);
 
         SelectedNote = Notes.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// 是否在编辑区域显示 Markdown 语法提示以及相关快捷按钮。
+    /// </summary>
+    public bool ShowMarkdownHints
+    {
+        get => _showMarkdownHints;
+        set => SetProperty(ref _showMarkdownHints, value);
     }
 
     /// <summary>

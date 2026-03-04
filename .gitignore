@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# DevNotes local data files
+/data/db/*.db
+/data/config/*.json

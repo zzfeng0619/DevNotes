@@ -6,6 +6,9 @@
         mc:Ignorable="d"
         Title="DevNotes - 本地开发笔记" Height="600" Width="1000"
         WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="260" />
@@ -56,7 +59,7 @@
             </DockPanel>
         </Border>
 
-        <!-- 右侧编辑区域 -->
+        <!-- 右侧编辑 + 预览区域 -->
         <Border Grid.Row="1"
                 Grid.Column="1"
                 Margin="8"
@@ -81,24 +84,74 @@
                         <TextBlock Text="最后更新：" />
                         <TextBlock Text="{Binding SelectedNote.UpdatedAt}" Margin="4,0,0,0" />
                     </StackPanel>
+
+                    <CheckBox Content="显示 Markdown 语法提示"
+                              Margin="0,4,0,0"
+                              IsChecked="{Binding ShowMarkdownHints, Mode=TwoWay}" />
                 </StackPanel>
 
                 <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="内容（Markdown 文本）" Grid.Row="0" Margin="0,0,0,4" />
+                    <!-- Markdown 语法提示与快捷插入按钮 -->
+                    <StackPanel Grid.Row="0"
+                                Grid.ColumnSpan="2"
+                                Margin="0,0,0,6"
+                                Orientation="Horizontal"
+                                Visibility="{Binding ShowMarkdownHints, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="常用 Markdown：" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Button Content="# 标题"
+                                Margin="0,0,4,0"
+                                Padding="6,2"
+                                Click="HeadingButton_OnClick" />
+                        <Button Content="**加粗**"
+                                Margin="0,0,4,0"
+                                Padding="6,2"
+                                Click="BoldButton_OnClick" />
+                        <Button Content="代码块"
+                                Margin="0,0,4,0"
+                                Padding="6,2"
+                                Click="CodeBlockButton_OnClick" />
+                        <Button Content="- 列表项"
+                                Margin="0,0,4,0"
+                                Padding="6,2"
+                                Click="ListItemButton_OnClick" />
+                    </StackPanel>
 
-                    <TextBox Grid.Row="1"
+                    <TextBlock Text="内容（Markdown 文本）"
+                               Grid.Row="1"
+                               Grid.Column="0"
+                               Margin="0,0,0,4" />
+
+                    <TextBlock Text="预览"
+                               Grid.Row="1"
+                               Grid.Column="1"
+                               Margin="8,0,0,4" />
+
+                    <TextBox Grid.Row="2"
+                             Grid.Column="0"
+                             x:Name="ContentTextBox"
                              Text="{Binding SelectedNote.Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             TextChanged="ContentTextBox_OnTextChanged"
                              AcceptsReturn="True"
                              VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto"
                              TextWrapping="Wrap"
                              FontFamily="Consolas"
                              FontSize="13" />
+
+                    <WebBrowser Grid.Row="2"
+                                Grid.Column="1"
+                                Margin="8,0,0,0"
+                                x:Name="MarkdownPreviewBrowser" />
                 </Grid>
             </Grid>
         </Border>
