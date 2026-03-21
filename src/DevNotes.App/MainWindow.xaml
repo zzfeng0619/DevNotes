@@ -4,40 +4,54 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="DevNotes - 本地开发笔记" Height="600" Width="1000"
+        Title="DevBlog - 个人博客管理" Height="700" Width="1100"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="260" />
+            <ColumnDefinition Width="280" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- 顶部工具栏 -->
         <ToolBarTray Grid.ColumnSpan="2" Grid.Row="0">
             <ToolBar>
-                <Button Content="新建笔记"
+                <Button Content="新建文章"
                         Margin="4,0"
                         Padding="8,2"
-                        Command="{Binding NewNoteCommand}" />
+                        Command="{Binding NewArticleCommand}" />
                 <Button Content="保存"
                         Margin="4,0"
                         Padding="8,2"
-                        Command="{Binding SaveNoteCommand}" />
+                        Command="{Binding SaveArticleCommand}" />
+                <Button Content="发布"
+                        Margin="4,0"
+                        Padding="8,2"
+                        Command="{Binding PublishArticleCommand}" />
                 <Button Content="删除"
                         Margin="4,0"
                         Padding="8,2"
-                        Command="{Binding DeleteNoteCommand}" />
+                        Command="{Binding DeleteArticleCommand}" />
+                <Separator />
+                <TextBox Width="180"
+                         Margin="4,0"
+                         Padding="4,2"
+                         Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalContentAlignment="Center" />
+                <Button Content="搜索"
+                        Margin="4,0"
+                        Padding="8,2" />
             </ToolBar>
         </ToolBarTray>
 
-        <!-- 左侧笔记列表 -->
+        <!-- 左侧边栏：文章列表与筛选 -->
         <Border Grid.Row="1"
                 Grid.Column="0"
                 Margin="8"
@@ -45,21 +59,63 @@
                 BorderThickness="1"
                 CornerRadius="4">
             <DockPanel>
-                <TextBlock Text="笔记列表"
-                           FontWeight="Bold"
-                           Padding="8,6"
-                           Background="#F3F3F3"
-                           DockPanel.Dock="Top" />
-                <ListBox ItemsSource="{Binding Notes}"
-                         SelectedItem="{Binding SelectedNote, Mode=TwoWay}"
-                         DisplayMemberPath="Title"
+                <!-- 状态筛选 -->
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4" HorizontalAlignment="Center">
+                    <RadioButton Content="全部" Margin="4,0"
+                                 IsChecked="{Binding FilterAll}"
+                                 Click="FilterAll_OnClick" />
+                    <RadioButton Content="草稿" Margin="4,0"
+                                 IsChecked="{Binding FilterDraft}"
+                                 Click="FilterDraft_OnClick" />
+                    <RadioButton Content="已发布" Margin="4,0"
+                                 IsChecked="{Binding FilterPublished}"
+                                 Click="FilterPublished_OnClick" />
+                </StackPanel>
+
+                <!-- 分类筛选 -->
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,4,4">
+                    <TextBlock Text="分类：" VerticalAlignment="Center" />
+                    <ComboBox Width="140"
+                              ItemsSource="{Binding Categories}"
+                              SelectedItem="{Binding FilterCategory}"
+                              DisplayMemberPath="Name" />
+                </StackPanel>
+
+                <!-- 文章列表 -->
+                <ListBox ItemsSource="{Binding Articles}"
+                         SelectedItem="{Binding SelectedArticle, Mode=TwoWay}"
                          Margin="4"
                          HorizontalContentAlignment="Stretch">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="4">
+                                <TextBlock Text="{Binding Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding CreatedAt, StringFormat='yyyy-MM-dd'}"
+                                               Foreground="#888"
+                                               FontSize="11"
+                                               Margin="0,2,8,0" />
+                                    <TextBlock Foreground="#888" FontSize="11" Margin="0,2,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="草稿" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Status}" Value="1">
+                                                        <Setter Property="Text" Value="已发布" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
                 </ListBox>
             </DockPanel>
         </Border>
 
-        <!-- 右侧编辑 + 预览区域 -->
+        <!-- 右侧编辑区 -->
         <Border Grid.Row="1"
                 Grid.Column="1"
                 Margin="8"
@@ -72,24 +128,55 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
+                <!-- 文章元数据 -->
                 <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,8">
                     <TextBlock Text="标题" Margin="0,0,0,2" />
-                    <TextBox Text="{Binding SelectedNote.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBox Text="{Binding SelectedArticle.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,0,6"
                              FontSize="14" />
 
+                    <TextBlock Text="摘要" Margin="0,0,0,2" />
+                    <TextBox Text="{Binding SelectedArticle.Summary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,6"
+                             MaxHeight="60"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True" />
+
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <TextBlock Text="创建时间：" />
-                        <TextBlock Text="{Binding SelectedNote.CreatedAt}" Margin="4,0,16,0" />
+                        <TextBlock Text="{Binding SelectedArticle.CreatedAt, StringFormat='yyyy-MM-dd HH:mm'}"
+                                   Margin="4,0,16,0" />
                         <TextBlock Text="最后更新：" />
-                        <TextBlock Text="{Binding SelectedNote.UpdatedAt}" Margin="4,0,0,0" />
+                        <TextBlock Text="{Binding SelectedArticle.UpdatedAt, StringFormat='yyyy-MM-dd HH:mm'}"
+                                   Margin="4,0,16,0" />
+                        <TextBlock Text="状态：" />
+                        <TextBlock Margin="4,0,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="草稿" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedArticle.Status}" Value="1">
+                                            <Setter Property="Text" Value="已发布" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
 
-                    <CheckBox Content="显示 Markdown 语法提示"
-                              Margin="0,4,0,0"
-                              IsChecked="{Binding ShowMarkdownHints, Mode=TwoWay}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock Text="分类：" VerticalAlignment="Center" />
+                        <ComboBox Width="140"
+                                  ItemsSource="{Binding Categories}"
+                                  SelectedItem="{Binding SelectedArticle.Category}"
+                                  DisplayMemberPath="Name"
+                                  Margin="4,0,16,0" />
+                        <CheckBox Content="显示 Markdown 语法提示"
+                                  IsChecked="{Binding ShowMarkdownHints, Mode=TwoWay}" />
+                    </StackPanel>
                 </StackPanel>
 
+                <!-- Markdown 编辑器与预览 -->
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -101,7 +188,7 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- Markdown 语法提示与快捷插入按钮 -->
+                    <!-- Markdown 语法提示与快捷按钮 -->
                     <StackPanel Grid.Row="0"
                                 Grid.ColumnSpan="2"
                                 Margin="0,0,0,6"
@@ -124,6 +211,10 @@
                                 Margin="0,0,4,0"
                                 Padding="6,2"
                                 Click="ListItemButton_OnClick" />
+                        <Button Content="![图片]"
+                                Margin="0,0,4,0"
+                                Padding="6,2"
+                                Click="ImageButton_OnClick" />
                     </StackPanel>
 
                     <TextBlock Text="内容（Markdown 文本）"
@@ -139,7 +230,7 @@
                     <TextBox Grid.Row="2"
                              Grid.Column="0"
                              x:Name="ContentTextBox"
-                             Text="{Binding SelectedNote.Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Text="{Binding SelectedArticle.Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              TextChanged="ContentTextBox_OnTextChanged"
                              AcceptsReturn="True"
                              VerticalScrollBarVisibility="Auto"
@@ -155,5 +246,12 @@
                 </Grid>
             </Grid>
         </Border>
+
+        <!-- 底部状态栏 -->
+        <StatusBar Grid.Row="2" Grid.ColumnSpan="2">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusTextBlock" Text="就绪" />
+            </StatusBarItem>
+        </StatusBar>
     </Grid>
 </Window>

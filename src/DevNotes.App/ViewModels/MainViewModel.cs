@@ -1,41 +1,134 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using DevNotes.Core;
-using DevNotes.Domain;
+using DevNotes.Domain.Interfaces;
+using DevNotes.Domain.Models;
 
 namespace DevNotes.App.ViewModels;
 
 /// <summary>
-/// 应用主窗口对应的 ViewModel，
-/// 负责管理笔记列表、当前选中笔记以及新建/保存/删除等基础操作。
+/// 应用主窗口对应的 ViewModel，负责管理文章列表、分类、标签以及文章操作。
 /// </summary>
 public class MainViewModel : ObservableObject
 {
-    private readonly INoteRepository _noteRepository;
-    private Note? _selectedNote;
+    private readonly IArticleRepository _articleRepository;
+    private readonly ICategoryRepository _categoryRepository;
+    private readonly ITagRepository _tagRepository;
+
+    private Article? _selectedArticle;
+    private Category? _filterCategory;
+    private ArticleStatus? _filterStatus;
+    private string _searchKeyword = string.Empty;
     private bool _showMarkdownHints;
 
+    private bool _filterAll = true;
+    private bool _filterDraft;
+    private bool _filterPublished;
+
     /// <summary>
-    /// 初始化 <see cref="MainViewModel"/> 实例，
-    /// 并通过仓储加载已有笔记列表。
+    /// 初始化 MainViewModel 实例。
     /// </summary>
-    /// <param name="noteRepository">笔记数据访问仓储实现。</param>
-    public MainViewModel(INoteRepository noteRepository)
+    public MainViewModel(
+        IArticleRepository articleRepository,
+        ICategoryRepository categoryRepository,
+        ITagRepository tagRepository)
     {
-        _noteRepository = noteRepository;
+        _articleRepository = articleRepository;
+        _categoryRepository = categoryRepository;
+        _tagRepository = tagRepository;
 
-        var existingNotes = _noteRepository.GetAll();
-        Notes = new ObservableCollection<Note>(existingNotes);
+        // 加载数据
+        Articles = new ObservableCollection<Article>(_articleRepository.GetAll());
+        Categories = new ObservableCollection<Category>(_categoryRepository.GetAll());
+        Tags = new ObservableCollection<Tag>(_tagRepository.GetAll());
 
-        NewNoteCommand = new RelayCommand(_ => CreateNewNote());
-        SaveNoteCommand = new RelayCommand(_ => SaveCurrentNote(), _ => CanSaveCurrentNote());
-        DeleteNoteCommand = new RelayCommand(_ => DeleteCurrentNote(), _ => SelectedNote != null);
+        // 初始化命令
+        NewArticleCommand = new RelayCommand(_ => CreateNewArticle());
+        SaveArticleCommand = new RelayCommand(_ => SaveCurrentArticle(), _ => CanSaveArticle());
+        DeleteArticleCommand = new RelayCommand(_ => DeleteCurrentArticle(), _ => SelectedArticle != null);
+        PublishArticleCommand = new RelayCommand(_ => PublishCurrentArticle(), _ => SelectedArticle?.Status == ArticleStatus.Draft);
 
-        SelectedNote = Notes.FirstOrDefault();
+        // 选中第一篇文章
+        SelectedArticle = Articles.FirstOrDefault();
     }
 
     /// <summary>
-    /// 是否在编辑区域显示 Markdown 语法提示以及相关快捷按钮。
+    /// 文章列表。
+    /// </summary>
+    public ObservableCollection<Article> Articles { get; }
+
+    /// <summary>
+    /// 分类列表。
+    /// </summary>
+    public ObservableCollection<Category> Categories { get; }
+
+    /// <summary>
+    /// 标签列表。
+    /// </summary>
+    public ObservableCollection<Tag> Tags { get; }
+
+    /// <summary>
+    /// 当前选中的文章。
+    /// </summary>
+    public Article? SelectedArticle
+    {
+        get => _selectedArticle;
+        set
+        {
+            if (SetProperty(ref _selectedArticle, value))
+            {
+                OnSelectedArticleChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 分类筛选。
+    /// </summary>
+    public Category? FilterCategory
+    {
+        get => _filterCategory;
+        set
+        {
+            if (SetProperty(ref _filterCategory, value))
+            {
+                FilterArticles();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 状态筛选。
+    /// </summary>
+    public ArticleStatus? FilterStatus
+    {
+        get => _filterStatus;
+        set
+        {
+            if (SetProperty(ref _filterStatus, value))
+            {
+                FilterArticles();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 搜索关键词。
+    /// </summary>
+    public string SearchKeyword
+    {
+        get => _searchKeyword;
+        set
+        {
+            if (SetProperty(ref _searchKeyword, value))
+            {
+                FilterArticles();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 是否显示 Markdown 语法提示。
     /// </summary>
     public bool ShowMarkdownHints
     {
@@ -44,99 +137,228 @@ public class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 当前所有笔记的集合，用于绑定到左侧列表。
+    /// 全部筛选状态。
     /// </summary>
-    public ObservableCollection<Note> Notes { get; }
-
-    /// <summary>
-    /// 当前在编辑或选中的笔记。
-    /// </summary>
-    public Note? SelectedNote
+    public bool FilterAll
     {
-        get => _selectedNote;
+        get => _filterAll;
         set
         {
-            if (SetProperty(ref _selectedNote, value))
+            if (SetProperty(ref _filterAll, value) && value)
             {
-                (DeleteNoteCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (SaveNoteCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                _filterDraft = false;
+                _filterPublished = false;
+                OnPropertyChanged(nameof(FilterDraft));
+                OnPropertyChanged(nameof(FilterPublished));
+                FilterStatus = null;
             }
         }
     }
 
     /// <summary>
-    /// 新建笔记命令，会在集合和数据库中创建一条新的笔记并设为当前选中项。
+    /// 草稿筛选状态。
     /// </summary>
-    public ICommand NewNoteCommand { get; }
+    public bool FilterDraft
+    {
+        get => _filterDraft;
+        set
+        {
+            if (SetProperty(ref _filterDraft, value) && value)
+            {
+                _filterAll = false;
+                _filterPublished = false;
+                OnPropertyChanged(nameof(FilterAll));
+                OnPropertyChanged(nameof(FilterPublished));
+                FilterStatus = ArticleStatus.Draft;
+            }
+        }
+    }
 
     /// <summary>
-    /// 保存当前笔记命令，将变更同步到数据库中。
+    /// 已发布筛选状态。
     /// </summary>
-    public ICommand SaveNoteCommand { get; }
+    public bool FilterPublished
+    {
+        get => _filterPublished;
+        set
+        {
+            if (SetProperty(ref _filterPublished, value) && value)
+            {
+                _filterAll = false;
+                _filterDraft = false;
+                OnPropertyChanged(nameof(FilterAll));
+                OnPropertyChanged(nameof(FilterDraft));
+                FilterStatus = ArticleStatus.Published;
+            }
+        }
+    }
 
     /// <summary>
-    /// 删除当前选中笔记命令，会在数据库中执行逻辑删除并从集合中移除。
+    /// 新建文章命令。
     /// </summary>
-    public ICommand DeleteNoteCommand { get; }
+    public ICommand NewArticleCommand { get; }
 
     /// <summary>
-    /// 创建一条新的空白笔记并添加到集合与数据库中，同时设为当前选中笔记。
+    /// 保存文章命令。
     /// </summary>
-    private void CreateNewNote()
+    public ICommand SaveArticleCommand { get; }
+
+    /// <summary>
+    /// 删除文章命令。
+    /// </summary>
+    public ICommand DeleteArticleCommand { get; }
+
+    /// <summary>
+    /// 发布文章命令。
+    /// </summary>
+    public ICommand PublishArticleCommand { get; }
+
+    /// <summary>
+    /// 创建新文章。
+    /// </summary>
+    private void CreateNewArticle()
     {
         var now = DateTime.Now;
-        var note = new Note
+        var article = new Article
         {
-            Title = "未命名笔记",
+            Title = "新文章",
             Content = string.Empty,
+            Summary = string.Empty,
+            Status = ArticleStatus.Draft,
             CreatedAt = now,
             UpdatedAt = now
         };
 
-        _noteRepository.Add(note);
-        Notes.Insert(0, note);
-        SelectedNote = note;
+        article.GenerateSlug();
+        _articleRepository.Add(article);
+
+        // 根据当前筛选状态决定是否添加到列表
+        if (FilterStatus == null || FilterStatus == ArticleStatus.Draft)
+        {
+            Articles.Insert(0, article);
+        }
+
+        SelectedArticle = article;
     }
 
     /// <summary>
-    /// 保存当前笔记的数据，并更新数据库中的对应记录。
+    /// 保存当前文章。
     /// </summary>
-    private void SaveCurrentNote()
+    private void SaveCurrentArticle()
     {
-        if (SelectedNote == null)
+        if (SelectedArticle == null)
         {
             return;
         }
 
-        SelectedNote.UpdatedAt = DateTime.Now;
-        _noteRepository.Update(SelectedNote);
-        (SaveNoteCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        SelectedArticle.UpdatedAt = DateTime.Now;
+        SelectedArticle.GenerateSlug();
+        _articleRepository.Update(SelectedArticle);
+
+        RefreshCommands();
     }
 
     /// <summary>
-    /// 删除当前选中笔记（逻辑删除并从当前集合中移除）。
+    /// 删除当前文章。
     /// </summary>
-    private void DeleteCurrentNote()
+    private void DeleteCurrentArticle()
     {
-        if (SelectedNote == null)
+        if (SelectedArticle == null)
         {
             return;
         }
 
-        var noteToRemove = SelectedNote;
-        _noteRepository.Delete(noteToRemove.Id);
-        Notes.Remove(noteToRemove);
-        SelectedNote = Notes.FirstOrDefault();
+        var articleToRemove = SelectedArticle;
+        _articleRepository.Delete(articleToRemove.Id);
+        Articles.Remove(articleToRemove);
+        SelectedArticle = Articles.FirstOrDefault();
     }
 
     /// <summary>
-    /// 判断当前笔记是否可以执行保存操作。
-    /// 可以根据标题或内容是否为空等条件进行约束。
+    /// 发布当前文章。
     /// </summary>
-    /// <returns>当存在选中笔记时返回 true，否则返回 false。</returns>
-    private bool CanSaveCurrentNote()
+    private void PublishCurrentArticle()
     {
-        return SelectedNote != null;
+        if (SelectedArticle == null || SelectedArticle.Status != ArticleStatus.Draft)
+        {
+            return;
+        }
+
+        var now = DateTime.Now;
+        SelectedArticle.Status = ArticleStatus.Published;
+        SelectedArticle.PublishedAt = now;
+        SelectedArticle.UpdatedAt = now;
+
+        _articleRepository.Update(SelectedArticle);
+
+        // 如果当前筛选是草稿，从列表中移除
+        if (FilterStatus == ArticleStatus.Draft)
+        {
+            Articles.Remove(SelectedArticle);
+            SelectedArticle = Articles.FirstOrDefault();
+        }
+
+        RefreshCommands();
+    }
+
+    /// <summary>
+    /// 筛选文章列表。
+    /// </summary>
+    private void FilterArticles()
+    {
+        Articles.Clear();
+
+        var allArticles = _articleRepository.GetAll(FilterStatus);
+
+        if (!string.IsNullOrWhiteSpace(SearchKeyword))
+        {
+            allArticles = _articleRepository.Search(SearchKeyword)
+                .Where(a => FilterStatus == null || a.Status == FilterStatus)
+                .ToList();
+        }
+
+        if (FilterCategory != null)
+        {
+            allArticles = allArticles.Where(a => a.CategoryId == FilterCategory.Id).ToList();
+        }
+
+        foreach (var article in allArticles)
+        {
+            Articles.Add(article);
+        }
+
+        SelectedArticle = Articles.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// 选中文章变化时的处理。
+    /// </summary>
+    private void OnSelectedArticleChanged()
+    {
+        // 更新关联的标签
+        if (SelectedArticle != null)
+        {
+            SelectedArticle.Tags = new List<Tag>(_tagRepository.GetByArticle(SelectedArticle.Id));
+        }
+
+        RefreshCommands();
+    }
+
+    /// <summary>
+    /// 更新命令可用状态。
+    /// </summary>
+    private void RefreshCommands()
+    {
+        (SaveArticleCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (DeleteArticleCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (PublishArticleCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// 判断是否可以保存文章。
+    /// </summary>
+    private bool CanSaveArticle()
+    {
+        return SelectedArticle != null;
     }
 }
-

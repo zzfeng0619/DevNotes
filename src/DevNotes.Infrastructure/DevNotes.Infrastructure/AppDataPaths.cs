@@ -3,14 +3,12 @@ using System.IO;
 namespace DevNotes.Infrastructure;
 
 /// <summary>
-/// 统一管理应用运行时使用的本地路径，例如数据库文件和资源目录。
-/// 当前实现基于开发环境的目录结构，后续可根据发布形态进行调整。
+/// 统一管理应用运行时使用的本地路径，例如数据库文件、图片存储和资源目录。
 /// </summary>
 public static class AppDataPaths
 {
     /// <summary>
     /// 获取 SQLite 数据库文件的完整路径。
-    /// 在当前项目结构下，会定位到解决方案根目录下的 data\db\notes.db。
     /// </summary>
     public static string GetDatabaseFilePath()
     {
@@ -21,14 +19,76 @@ public static class AppDataPaths
             Directory.CreateDirectory(dbDirectory);
         }
 
-        return Path.Combine(dbDirectory, "notes.db");
+        return Path.Combine(dbDirectory, "blog.db");
     }
 
     /// <summary>
-    /// 获取用于保存 UI 设置的配置文件路径。
-    /// 在当前项目结构下，会定位到解决方案根目录下的 data\config\ui-settings.json。
+    /// 获取图片存储根目录。
     /// </summary>
-    public static string GetUiSettingsFilePath()
+    public static string GetImagesDirectory()
+    {
+        var imagesDirectory = Path.Combine(GetSolutionRootPath(), "data", "images");
+
+        if (!Directory.Exists(imagesDirectory))
+        {
+            Directory.CreateDirectory(imagesDirectory);
+        }
+
+        return imagesDirectory;
+    }
+
+    /// <summary>
+    /// 获取指定年月的图片存储目录。
+    /// </summary>
+    /// <param name="year">年份。</param>
+    /// <param name="month">月份。</param>
+    /// <returns>目录完整路径。</returns>
+    public static string GetImagesDirectory(int year, int month)
+    {
+        var directory = Path.Combine(GetImagesDirectory(), year.ToString(), month.ToString("D2"));
+
+        if (!Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        return directory;
+    }
+
+    /// <summary>
+    /// 获取缩略图存储目录。
+    /// </summary>
+    public static string GetThumbnailsDirectory()
+    {
+        var thumbnailsDirectory = Path.Combine(GetImagesDirectory(), "thumbnails");
+
+        if (!Directory.Exists(thumbnailsDirectory))
+        {
+            Directory.CreateDirectory(thumbnailsDirectory);
+        }
+
+        return thumbnailsDirectory;
+    }
+
+    /// <summary>
+    /// 获取附件存储目录。
+    /// </summary>
+    public static string GetAttachmentsDirectory()
+    {
+        var attachmentsDirectory = Path.Combine(GetSolutionRootPath(), "data", "attachments");
+
+        if (!Directory.Exists(attachmentsDirectory))
+        {
+            Directory.CreateDirectory(attachmentsDirectory);
+        }
+
+        return attachmentsDirectory;
+    }
+
+    /// <summary>
+    /// 获取用于保存应用设置的配置文件路径。
+    /// </summary>
+    public static string GetSettingsFilePath()
     {
         var configDirectory = Path.Combine(GetSolutionRootPath(), "data", "config");
 
@@ -37,20 +97,16 @@ public static class AppDataPaths
             Directory.CreateDirectory(configDirectory);
         }
 
-        return Path.Combine(configDirectory, "ui-settings.json");
+        return Path.Combine(configDirectory, "settings.json");
     }
 
     /// <summary>
     /// 计算解决方案根目录的路径。
-    /// 当前实现基于运行时目录向上回退固定层级。
     /// </summary>
     /// <returns>解决方案根目录的完整路径。</returns>
     private static string GetSolutionRootPath()
     {
-        // AppContext.BaseDirectory 一般指向 WPF 程序的 bin\Debug\net10.0-windows 目录。
-        // 通过向上回退若干级目录，再进入 data 子目录以兼容当前解决方案布局。
         var baseDir = AppContext.BaseDirectory;
         return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
     }
 }
-
