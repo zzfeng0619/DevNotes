@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using DevNotes.App.ViewModels;
 using DevNotes.App.Views;
 using DevNotes.Domain.Interfaces;
@@ -25,7 +26,10 @@ public partial class MainWindow : Window
     private AppSettings _settings = new();
     private IImageStorageService _imageStorageService = null!;
     private IImageAttachmentRepository _imageAttachmentRepository = null!;
+    private IArticleRepository _articleRepository = null!;
     private int? _currentArticleId;
+    private DispatcherTimer? _autoSaveTimer;
+    private bool _contentChanged;
 
     /// <summary>
     /// 初始化主窗口并加载 XAML 定义的界面。
@@ -42,14 +46,14 @@ public partial class MainWindow : Window
         var connectionString = DatabaseInitializer.GetConnectionString();
 
         // 创建仓储实例
-        var articleRepository = new SqliteArticleRepository(connectionString);
+        _articleRepository = new SqliteArticleRepository(connectionString);
         var categoryRepository = new SqliteCategoryRepository(connectionString);
         var tagRepository = new SqliteTagRepository(connectionString);
         _imageAttachmentRepository = new SqliteImageAttachmentRepository(connectionString);
         _imageStorageService = new LocalImageStorageService();
 
         // 初始化 ViewModel
-        _viewModel = new MainViewModel(articleRepository, categoryRepository, tagRepository)
+        _viewModel = new MainViewModel(_articleRepository, categoryRepository, tagRepository)
         {
             ShowMarkdownHints = _settings.ShowMarkdownHints
         };
@@ -71,15 +75,77 @@ public partial class MainWindow : Window
             }
         };
 
-        // 窗口初次加载时初始化预览
+        // 窗口初次加载时初始化预览和自动保存
         Loaded += (_, _) =>
         {
             UpdateMarkdownPreview(_viewModel.SelectedArticle?.Content ?? string.Empty);
             _currentArticleId = _viewModel.SelectedArticle?.Id;
+            InitializeAutoSave();
+        };
+
+        // 窗口关闭时停止自动保存
+        Closing += (_, _) =>
+        {
+            _autoSaveTimer?.Stop();
         };
 
         // 注册剪贴板粘贴事件
         ContentTextBox.PreviewKeyDown += ContentTextBox_PreviewKeyDown;
+    }
+
+    /// <summary>
+    /// 初始化自动保存定时器。
+    /// </summary>
+    private void InitializeAutoSave()
+    {
+        if (_settings.AutoSaveIntervalSeconds <= 0)
+        {
+            return;
+        }
+
+        _autoSaveTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(_settings.AutoSaveIntervalSeconds)
+        };
+        _autoSaveTimer.Tick += AutoSaveTimer_Tick;
+        _autoSaveTimer.Start();
+    }
+
+    /// <summary>
+    /// 自动保存定时器触发事件。
+    /// </summary>
+    private void AutoSaveTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_contentChanged && _viewModel?.SelectedArticle != null)
+        {
+            AutoSaveCurrentArticle();
+        }
+    }
+
+    /// <summary>
+    /// 自动保存当前文章。
+    /// </summary>
+    private void AutoSaveCurrentArticle()
+    {
+        if (_viewModel?.SelectedArticle == null)
+        {
+            return;
+        }
+
+        try
+        {
+            _viewModel.SelectedArticle.UpdatedAt = DateTime.Now;
+            _viewModel.SelectedArticle.GenerateSlug();
+            _articleRepository.Update(_viewModel.SelectedArticle);
+            _contentChanged = false;
+
+            // 更新状态栏提示
+            StatusTextBlock.Text = $"已自动保存 - {DateTime.Now:HH:mm:ss}";
+        }
+        catch
+        {
+            // 静默处理自动保存失败
+        }
     }
 
     /// <summary>
@@ -134,15 +200,26 @@ public partial class MainWindow : Window
             .AppendLine("<head>")
             .AppendLine("<meta charset=\"utf-8\" />")
             .AppendLine("<style>")
-            .AppendLine("body { font-family: 'Segoe UI', sans-serif; margin: 12px; }")
-            .AppendLine("pre { background-color: #f5f5f5; padding: 8px; overflow-x: auto; border-radius: 4px; }")
-            .AppendLine("code { font-family: Consolas, monospace; background-color: #f0f0f0; padding: 2px 4px; border-radius: 2px; }")
+            .AppendLine("body { font-family: 'Segoe UI', sans-serif; margin: 12px; line-height: 1.6; color: #24292e; }")
+            .AppendLine("h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }")
+            .AppendLine("h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }")
+            .AppendLine("h3 { font-size: 1.25em; }")
+            .AppendLine("h1, h2, h3, h4, h5, h6 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 600; }")
+            .AppendLine("pre { background-color: #f6f8fa; padding: 16px; overflow-x: auto; border-radius: 6px; border: 1px solid #e1e4e8; }")
+            .AppendLine("code { font-family: 'Cascadia Code', Consolas, 'Courier New', monospace; font-size: 0.9em; }")
+            .AppendLine(":not(pre) > code { background-color: rgba(175, 184, 193, 0.2); padding: 2px 6px; border-radius: 4px; }")
             .AppendLine("pre code { background-color: transparent; padding: 0; }")
-            .AppendLine("blockquote { border-left: 3px solid #ddd; margin: 0; padding-left: 12px; color: #666; }")
-            .AppendLine("img { max-width: 100%; height: auto; }")
-            .AppendLine("table { border-collapse: collapse; width: 100%; }")
-            .AppendLine("th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }")
-            .AppendLine("th { background-color: #f5f5f5; }")
+            .AppendLine("blockquote { border-left: 4px solid #dfe2e5; margin: 1em 0; padding: 0 16px; color: #656d76; }")
+            .AppendLine("img { max-width: 100%; height: auto; border-radius: 4px; }")
+            .AppendLine("table { border-collapse: collapse; width: 100%; margin: 1em 0; }")
+            .AppendLine("th, td { border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; }")
+            .AppendLine("th { background-color: #f6f8fa; font-weight: 600; }")
+            .AppendLine("tr:nth-child(even) { background-color: #f9f9f9; }")
+            .AppendLine("a { color: #0969da; text-decoration: none; }")
+            .AppendLine("a:hover { text-decoration: underline; }")
+            .AppendLine("hr { border: none; border-top: 1px solid #d0d7de; margin: 2em 0; }")
+            .AppendLine("ul, ol { padding-left: 2em; }")
+            .AppendLine("li { margin: 0.25em 0; }")
             .AppendLine("</style>")
             .AppendLine("</head>")
             .AppendLine("<body>")
@@ -183,6 +260,7 @@ public partial class MainWindow : Window
 
         var currentText = ContentTextBox.Text ?? string.Empty;
         UpdateMarkdownPreview(currentText);
+        _contentChanged = true;
     }
 
     /// <summary>
@@ -331,6 +409,71 @@ public partial class MainWindow : Window
     private void ListItemButton_OnClick(object sender, RoutedEventArgs e)
     {
         InsertMarkdownSnippet("- ", string.Empty, "列表项");
+    }
+
+    /// <summary>
+    /// 插入斜体语法。
+    /// </summary>
+    private void ItalicButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        InsertMarkdownSnippet("*", "*", "斜体文本");
+    }
+
+    /// <summary>
+    /// 插入删除线语法。
+    /// </summary>
+    private void StrikethroughButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        InsertMarkdownSnippet("~~", "~~", "删除线文本");
+    }
+
+    /// <summary>
+    /// 插入行内代码语法。
+    /// </summary>
+    private void InlineCodeButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        InsertMarkdownSnippet("`", "`", "代码");
+    }
+
+    /// <summary>
+    /// 插入链接语法。
+    /// </summary>
+    private void LinkButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        InsertMarkdownSnippet("[", "](https://example.com)", "链接文本");
+    }
+
+    /// <summary>
+    /// 插入有序列表项语法。
+    /// </summary>
+    private void OrderedListItemButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        InsertMarkdownSnippet("1. ", string.Empty, "列表项");
+    }
+
+    /// <summary>
+    /// 插入引用语法。
+    /// </summary>
+    private void QuoteButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        InsertMarkdownSnippet("> ", string.Empty, "引用内容");
+    }
+
+    /// <summary>
+    /// 插入表格语法。
+    /// </summary>
+    private void TableButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var tableTemplate = "\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |\n";
+        InsertMarkdownSnippet(tableTemplate, string.Empty, string.Empty);
+    }
+
+    /// <summary>
+    /// 插入分割线语法。
+    /// </summary>
+    private void HorizontalRuleButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        InsertMarkdownSnippet("\n---\n", string.Empty, string.Empty);
     }
 
     /// <summary>

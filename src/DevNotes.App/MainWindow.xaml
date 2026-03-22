@@ -189,33 +189,64 @@
                     </Grid.RowDefinitions>
 
                     <!-- Markdown 语法提示与快捷按钮 -->
-                    <StackPanel Grid.Row="0"
-                                Grid.ColumnSpan="2"
-                                Margin="0,0,0,6"
-                                Orientation="Horizontal"
-                                Visibility="{Binding ShowMarkdownHints, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="常用 Markdown：" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <Button Content="# 标题"
-                                Margin="0,0,4,0"
+                    <WrapPanel Grid.Row="0"
+                               Grid.ColumnSpan="2"
+                               Margin="0,0,0,6"
+                               Visibility="{Binding ShowMarkdownHints, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="Markdown：" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Button Content="H1 标题"
+                                Margin="0,0,4,4"
                                 Padding="6,2"
                                 Click="HeadingButton_OnClick" />
                         <Button Content="**加粗**"
-                                Margin="0,0,4,0"
+                                Margin="0,0,4,4"
                                 Padding="6,2"
                                 Click="BoldButton_OnClick" />
+                        <Button Content="*斜体*"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="ItalicButton_OnClick" />
+                        <Button Content="~~删除~~"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="StrikethroughButton_OnClick" />
+                        <Button Content="`代码`"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="InlineCodeButton_OnClick" />
                         <Button Content="代码块"
-                                Margin="0,0,4,0"
+                                Margin="0,0,4,4"
                                 Padding="6,2"
                                 Click="CodeBlockButton_OnClick" />
-                        <Button Content="- 列表项"
-                                Margin="0,0,4,0"
+                        <Button Content="[链接]"
+                                Margin="0,0,4,4"
                                 Padding="6,2"
-                                Click="ListItemButton_OnClick" />
+                                Click="LinkButton_OnClick" />
                         <Button Content="![图片]"
-                                Margin="0,0,4,0"
+                                Margin="0,0,4,4"
                                 Padding="6,2"
                                 Click="ImageButton_OnClick" />
-                    </StackPanel>
+                        <Button Content="- 列表"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="ListItemButton_OnClick" />
+                        <Button Content="1. 有序"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="OrderedListItemButton_OnClick" />
+                        <Button Content="> 引用"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="QuoteButton_OnClick" />
+                        <Button Content="表格"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="TableButton_OnClick" />
+                        <Button Content="--- 分割线"
+                                Margin="0,0,4,4"
+                                Padding="6,2"
+                                Click="HorizontalRuleButton_OnClick" />
+                    </WrapPanel>
 
                     <TextBlock Text="内容（Markdown 文本）"
                                Grid.Row="1"
