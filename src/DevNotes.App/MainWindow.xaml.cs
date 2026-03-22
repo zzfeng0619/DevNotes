@@ -1,10 +1,18 @@
+using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using DevNotes.App.ViewModels;
+using DevNotes.App.Views;
+using DevNotes.Domain.Interfaces;
+using DevNotes.Domain.Models;
 using DevNotes.Infrastructure;
 using DevNotes.Infrastructure.Repositories;
+using DevNotes.Infrastructure.Services;
 using Markdig;
+using Microsoft.Win32;
 
 namespace DevNotes.App;
 
@@ -15,6 +23,9 @@ public partial class MainWindow : Window
 {
     private MainViewModel? _viewModel;
     private AppSettings _settings = new();
+    private IImageStorageService _imageStorageService = null!;
+    private IImageAttachmentRepository _imageAttachmentRepository = null!;
+    private int? _currentArticleId;
 
     /// <summary>
     /// 初始化主窗口并加载 XAML 定义的界面。
@@ -34,6 +45,8 @@ public partial class MainWindow : Window
         var articleRepository = new SqliteArticleRepository(connectionString);
         var categoryRepository = new SqliteCategoryRepository(connectionString);
         var tagRepository = new SqliteTagRepository(connectionString);
+        _imageAttachmentRepository = new SqliteImageAttachmentRepository(connectionString);
+        _imageStorageService = new LocalImageStorageService();
 
         // 初始化 ViewModel
         _viewModel = new MainViewModel(articleRepository, categoryRepository, tagRepository)
@@ -48,6 +61,7 @@ public partial class MainWindow : Window
         {
             if (args.PropertyName == nameof(MainViewModel.SelectedArticle))
             {
+                _currentArticleId = _viewModel.SelectedArticle?.Id;
                 UpdateMarkdownPreview(_viewModel.SelectedArticle?.Content ?? string.Empty);
             }
             else if (args.PropertyName == nameof(MainViewModel.ShowMarkdownHints))
@@ -61,7 +75,11 @@ public partial class MainWindow : Window
         Loaded += (_, _) =>
         {
             UpdateMarkdownPreview(_viewModel.SelectedArticle?.Content ?? string.Empty);
+            _currentArticleId = _viewModel.SelectedArticle?.Id;
         };
+
+        // 注册剪贴板粘贴事件
+        ContentTextBox.PreviewKeyDown += ContentTextBox_PreviewKeyDown;
     }
 
     /// <summary>
@@ -80,6 +98,35 @@ public partial class MainWindow : Window
             .Build();
 
         var htmlBody = Markdig.Markdown.ToHtml(markdown ?? string.Empty, pipeline);
+
+        // 将相对图片路径转换为 Base64 Data URL
+        var imagesDir = AppDataPaths.GetImagesDirectory();
+        htmlBody = Regex.Replace(
+            htmlBody,
+            @"src=""([^""]+)""",
+            match =>
+            {
+                var relativePath = match.Groups[1].Value;
+                if (!relativePath.StartsWith("http") && !relativePath.StartsWith("data:"))
+                {
+                    var absolutePath = Path.Combine(imagesDir, relativePath);
+                    if (File.Exists(absolutePath))
+                    {
+                        try
+                        {
+                            var imageBytes = File.ReadAllBytes(absolutePath);
+                            var base64 = Convert.ToBase64String(imageBytes);
+                            var mimeType = GetMimeType(relativePath);
+                            return $"src=\"data:{mimeType};base64,{base64}\"";
+                        }
+                        catch
+                        {
+                            // 如果读取失败，保持原路径
+                        }
+                    }
+                }
+                return match.Value;
+            });
 
         var html = new StringBuilder()
             .AppendLine("<!DOCTYPE html>")
@@ -108,6 +155,23 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 根据文件扩展名获取 MIME 类型。
+    /// </summary>
+    private static string GetMimeType(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".bmp" => "image/bmp",
+            _ => "image/png"
+        };
+    }
+
+    /// <summary>
     /// 编辑区域内容发生变化时触发，实时刷新 Markdown 预览。
     /// </summary>
     private void ContentTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
@@ -119,6 +183,56 @@ public partial class MainWindow : Window
 
         var currentText = ContentTextBox.Text ?? string.Empty;
         UpdateMarkdownPreview(currentText);
+    }
+
+    /// <summary>
+    /// 键盘事件处理，用于捕获 Ctrl+V 粘贴图片。
+    /// </summary>
+    private void ContentTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            if (Clipboard.ContainsImage())
+            {
+                PasteImageFromClipboard();
+                e.Handled = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 从剪贴板粘贴图片。
+    /// </summary>
+    private void PasteImageFromClipboard()
+    {
+        if (_currentArticleId == null || _currentArticleId == 0)
+        {
+            MessageBox.Show("请先保存文章后再粘贴图片", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            var image = Clipboard.GetImage();
+            if (image == null)
+            {
+                return;
+            }
+
+            // 将图片转换为 PNG 格式的字节数组
+            using var stream = new MemoryStream();
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+            encoder.Save(stream);
+            var imageData = stream.ToArray();
+
+            // 保存图片
+            SaveAndInsertImage(imageData, "pasted_image.png", "粘贴的图片");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"粘贴图片失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     /// <summary>
@@ -157,6 +271,37 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 保存图片并插入到编辑器。
+    /// </summary>
+    private void SaveAndInsertImage(byte[] imageData, string originalFileName, string altText)
+    {
+        if (_currentArticleId == null || _currentArticleId == 0)
+        {
+            MessageBox.Show("请先保存文章后再上传图片", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            // 保存图片到本地
+            var imageAttachment = _imageStorageService.SaveImage(originalFileName, imageData);
+            imageAttachment.ArticleId = _currentArticleId.Value;
+            imageAttachment.AltText = altText;
+
+            // 保存到数据库
+            _imageAttachmentRepository.Add(imageAttachment);
+
+            // 插入 Markdown 图片语法
+            var imageMarkdown = $"![{altText}]({imageAttachment.StoragePath})";
+            InsertMarkdownSnippet(imageMarkdown, string.Empty, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"保存图片失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
     /// 插入一级标题语法。
     /// </summary>
     private void HeadingButton_OnClick(object sender, RoutedEventArgs e)
@@ -189,11 +334,25 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 插入图片语法。
+    /// 插入图片（打开上传对话框）。
     /// </summary>
     private void ImageButton_OnClick(object sender, RoutedEventArgs e)
     {
-        InsertMarkdownSnippet("![", "](图片路径)", "图片描述");
+        if (_currentArticleId == null || _currentArticleId == 0)
+        {
+            MessageBox.Show("请先保存文章后再上传图片", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ImageUploadDialog
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() == true && dialog.ImageData != null)
+        {
+            SaveAndInsertImage(dialog.ImageData, dialog.OriginalFileName, dialog.AltText);
+        }
     }
 
     /// <summary>

@@ -1,0 +1,79 @@
+<Window x:Class="DevNotes.App.Views.ImageUploadDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="插入图片" Height="450" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 拖拽区域 / 预览区域 -->
+        <Border Grid.Row="0"
+                BorderBrush="#CCC"
+                BorderThickness="2"
+                CornerRadius="8"
+                Background="#F9F9F9"
+                AllowDrop="True"
+                Drop="Border_Drop"
+                DragEnter="Border_DragEnter"
+                DragLeave="Border_DragLeave"
+                x:Name="DropZone">
+            <Grid>
+                <!-- 无图片时显示的提示 -->
+                <StackPanel x:Name="PlaceholderPanel"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                    <TextBlock Text="📷"
+                               FontSize="48"
+                               HorizontalAlignment="Center"
+                               Foreground="#888" />
+                    <TextBlock Text="拖拽图片到此处"
+                               FontSize="14"
+                               Foreground="#888"
+                               HorizontalAlignment="Center"
+                               Margin="0,8,0,4" />
+                    <TextBlock Text="或"
+                               FontSize="12"
+                               Foreground="#AAA"
+                               HorizontalAlignment="Center" />
+                    <Button Content="选择文件"
+                            Margin="0,8,0,0"
+                            Padding="16,6"
+                            Click="SelectFileButton_Click" />
+                </StackPanel>
+
+                <!-- 图片预览 -->
+                <Image x:Name="PreviewImage"
+                       Stretch="Uniform"
+                       Margin="8"
+                       Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- 图片描述 -->
+        <TextBlock Grid.Row="1" Text="图片描述（Alt Text）：" Margin="0,12,0,4" />
+        <TextBox Grid.Row="2"
+                 x:Name="AltTextBox"
+                 Margin="0,0,0,12"
+                 Padding="4" />
+
+        <!-- 按钮 -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="取消"
+                    Width="80"
+                    Margin="0,0,8,0"
+                    Click="CancelButton_Click" />
+            <Button Content="插入"
+                    Width="80"
+                    IsDefault="True"
+                    IsEnabled="False"
+                    x:Name="InsertButton"
+                    Click="InsertButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>
